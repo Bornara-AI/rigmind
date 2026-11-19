@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend_django
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rigmind
+          POSTGRES_USER: rigmind
+          POSTGRES_PASSWORD: rigmind
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rigmind"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-secret
+      DATABASE_URL: postgres://rigmind:rigmind@localhost:5432/rigmind
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv pip install --system -r pyproject.toml --extra dev
+      - run: ruff check .
+      - run: black --check .
+      - run: pytest
+
+  ai:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai_service
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv pip install --system -r pyproject.toml --extra dev
+      - run: ruff check .
+      - run: black --check .
+      - run: pytest
