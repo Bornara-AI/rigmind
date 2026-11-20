@@ -65,7 +65,7 @@ Rules:
 | Duplicates | 15 well × product keys appear twice (well reported at two facilities) | Sum volumes; keep both facility IDs |
 | Masked values | `***` in FromToID 15,894 rows, Hours 1,899, Volume 11 | NULL + `is_masked`; exclude masked FromToID rows from well data |
 | Other well activities | ROYALTY, VENT, SHUTIN, INJ, FUEL, FLARE, LD* | FLARE/VENT/FUEL → `facility_activity_monthly`; INJ for injection wells (later) |
-| Amendments | Aug file has rows submitted in Sep (493k) and **Oct (35k)** | Re-download the last 3 months on every refresh and upsert |
+| Amendments | Aug file has rows submitted in Sep (493k) and **Oct (35k)** | Re-download the last 3 months on every refresh and replace each month whose file changed (SHA-256) |
 
 | Infrastructure file | Size | Rows | Useful columns |
 |---|---|---|---|
@@ -88,6 +88,8 @@ Well Infrastructure already carries the licensee, so "production by company" doe
    - Distinct `FromToID` on PROD rows: 135,265 (oil > 0: 42,655). The 134,547 / 42,567 in §2 came from an earlier inspection with a definition that was not recorded; use the reader's numbers from now on.
 3. **Load:** Django management command `load_petrinex --month 2026-08` (or `--from/--to`): COPY the reader's filtered, typed rows into `stg_volumetric` (the reader's 16 columns, not all 30), upsert `operators` and `facilities`, then replace the month in `production_monthly` (well × month × product; duplicates summed, `facility_ids` kept) and `facility_activity_monthly`. One transaction per month; each load is recorded in `petrinex_loads` (file, SHA-256, row counts).
    - **Measured (2026-11-20):** 24 months (2024-09 → 2026-08) ≈ 30 s per month; ~242k production rows and 45k–72k flare/vent/fuel rows per month (FUEL/VENT rows rise in winter).
+   - A file identical (SHA-256) to the last load of its month is skipped unless `--force`, so the 3-month refresh only reloads months that changed (3 unchanged months: ~5 s). After loading, the command runs `ANALYZE` on both production tables. `stg_volumetric` is `UNLOGGED` (no WAL for throwaway rows).
+   - Replacing a month leaves ~243k dead rows until autovacuum runs, which slows the next reload (27 s clean vs 32 s with one month of dead rows). Partitioning by month would remove this: [ADR 0003](adr/0003-partition-production-by-month.md) (proposed).
 4. **Refresh:** Celery beat, monthly: download the newest month + re-download the previous 3 (amendments) + infrastructure, then load.
 5. **Tests:** fixtures are 50-row CSVs cut from the real files (masked rows, a quoted comma, a duplicate well, a blank-hours GAS row), zipped twice like the real thing. No network in tests.
 

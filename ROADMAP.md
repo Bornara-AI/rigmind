@@ -16,7 +16,7 @@ Milestones in build order. Data sources and pipeline: [docs/DATA_PLAN.md](docs/D
 - [x] `users` app: custom user + role (before the first migration)
 - [x] `production` app: Operator, Facility, ProductionMonthly, FacilityActivityMonthly, staging, load audit
 - [x] `load_petrinex`: COPY into staging, replace-by-month, lineage columns; last 24 months loaded
-- [ ] Wells from Well Infrastructure (reader + `wells` table + `v_well_monthly` view)
+- [ ] Wells from Well Infrastructure (reader + `wells` table + `v_well_monthly` view); re-check the WellID join on the full production set and report unmatched wells
 - [ ] `documents` app (allowed_roles, upload)
 - [ ] `seed_demo`: demo company, users per role, watchlist of ~50 real wells
 
@@ -55,6 +55,7 @@ Milestones in build order. Data sources and pipeline: [docs/DATA_PLAN.md](docs/D
 ## M12 — Observability, guardrails, cost
 - [ ] Langfuse / OpenTelemetry traces, rate limiting, caching, eval dashboard
 - [ ] Monthly Petrinex refresh (Celery beat, re-load amended months)
+- [ ] Decide [ADR 0003](docs/adr/0003-partition-production-by-month.md): partition production tables by month (swap a partition instead of delete + insert)
 
 ## M13 — Release
 - [ ] Deploy (Azure Container Apps), demo video, README with results and numbers
