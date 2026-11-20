@@ -43,9 +43,11 @@ RigMind runs on public Alberta data from [Petrinex](https://www.petrinex.gov.ab.
 docker compose exec django python manage.py migrate
 docker compose exec django python -m petrinex.download vol --from 2024-09 --to 2026-08
 docker compose exec django python manage.py load_petrinex --from 2024-09 --to 2026-08
+docker compose exec django python -m petrinex.download infra "Well Infrastructure"
+docker compose exec django python manage.py load_wells
 ```
 
-Each month takes about 30 seconds to load; rerunning a month replaces it.
+Each month takes about 30 seconds to load; rerunning a month replaces it, and unchanged files are skipped. Wells take about 90 seconds. Per-well monthly production with GOR and water cut is in the `v_well_monthly` view.
 
 ## Roadmap
 

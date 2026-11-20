@@ -59,7 +59,7 @@ Rules:
 | Size per month | 7.7 MB download, **120 MB CSV, 529,582 rows**, 30 columns, header row | Stream rows (`zipfile` + `io.TextIOWrapper` + `csv`), don't load the whole file |
 | Quoting | Mostly unquoted, but ~1,800 rows/month have quoted commas (`"MEDICINE HAT, CITY OF"`) | Use the `csv` module; `line.split(",")` silently breaks rows |
 | Well rows | `FromToIDType = "WI"`, `ActivityID = "PROD"`: 242k rows, **134,547 producing wells**, 42,567 with oil > 0 | This is `production_monthly` |
-| Well ID | `ABWI100010206504W400` (= UWI 100/01-02-065-04W4/00) | Text key; matches `WellID` in Well Infrastructure **100%** (134,547 of 134,547) |
+| Well ID | `ABWI100010206504W400` (= UWI 100/01-02-065-04W4/00) | Text key; matches `WellID` in Well Infrastructure **100% on the full set**: all 149,974 wells with production in 2024-09 → 2026-08 have a well record (checked by `load_wells`, 2026-11-20). An earlier 134,547-well check skipped rows with quoted commas. |
 | Products on PROD rows | GAS 133k, WATER 62k, OIL 43k, COND 3.8k, small others | Pivot to oil_m3, gas_e3m3, water_m3, cond_m3 |
 | Hours | Set on almost all OIL rows, blank on ~40% of GAS and most WATER rows | hours_on = max(Hours) across the well's products that month |
 | Duplicates | 15 well × product keys appear twice (well reported at two facilities) | Sum volumes; keep both facility IDs |
@@ -69,7 +69,7 @@ Rules:
 
 | Infrastructure file | Size | Rows | Useful columns |
 |---|---|---|---|
-| Well Infrastructure | 67 MB zip, 296 MB CSV (zip in zip) | 681,928 | WellID, WellName, LicenceNumber, Field/FieldName, Area, PoolDeposit/Name, WellStatus*, SpudDate, HorizontalDrill, FinalTotalDepth, **LicenseeID, LicenseeName**, LinkedFacilityID, ConfidentialType |
+| Well Infrastructure | 67 MB zip, 296 MB CSV (zip in zip) | 681,959 rows, **668,202 wells** (one row per well × linked facility; 13,757 wells have 2+ rows) | WellID, WellName, LicenceNumber, Field/FieldName, Area, PoolDeposit/Name, WellStatus*, SpudDate, HorizontalDrill, FinalTotalDepth, **LicenseeID, LicenseeName**, LinkedFacilityID, ConfidentialType |
 | Well Licence | zip (size not measured) | 529,841 | LicenceNumber, LicenceIssueDate, LicenceStatus, LicenseeName, location, WellPurpose, WellSubstance, TargetPool, **OrphanWellFlg** |
 
 Well Infrastructure already carries the licensee, so "production by company" does not need the facility operator (`OperatorBAID` in volumetrics is the *facility* operator).
@@ -85,7 +85,9 @@ Well Infrastructure already carries the licensee, so "production by company" doe
    - Polite: one request at a time, retry with backoff, skip months already on disk unless `--force`. Log URL, bytes and SHA-256 of each file in `data/raw/petrinex/manifest.jsonl`.
 2. **Parse:** `petrinex.read.iter_rows(zip_path)` yields typed rows (a dataclass per file) straight from the inner zip; the filter keeps well PROD rows and all FLARE/VENT/FUEL rows (these appear on well rows too: VENT 19k, FUEL 8.6k, FLARE 0.6k on `WI` in Aug 2026).
    - **Measured on Aug 2026 (2026-11-20):** 286,193 of 529,582 rows kept (54%): PROD 243,446, VENT 24,749, FUEL 14,932, FLARE 3,066; 774 kept rows masked (all in Hours). ~11 s, 51 MB peak memory. PROD only occurs on `WI` rows; Hours are whole numbers.
-   - Distinct `FromToID` on PROD rows: 135,265 (oil > 0: 42,655). The 134,547 / 42,567 in §2 came from an earlier inspection with a definition that was not recorded; use the reader's numbers from now on.
+   - Distinct `FromToID` on PROD rows: 135,265 (oil > 0: 42,655). The 134,547 / 42,567 in §2 came from an earlier check that split rows on commas and so skipped ~1,800 rows with quoted commas; use the reader's numbers.
+4. **Wells:** `load_wells` streams Well Infrastructure (`petrinex.infra.iter_wells`, adds the formatted UWI, upper-cases mixed-case codes, blanks masked pool fields with `is_masked`) into `stg_wells`, then upserts one row per well into `wells` with `linked_facility_ids` merged (~85 s for 668k wells). Wells are upserted, not replaced, because other tables will reference them. It then reports production wells without a well record (0 on the full set).
+   - `v_well_monthly` (SQL view): one row per well × month with oil_m3, gas_e3m3, water_m3, cond_m3, hours_on, GOR (m3/m3), water cut and well name/UWI/licensee/field. A single-well query takes ~5 ms (the well filter is pushed into the view's GROUP BY and uses the unique index).
 3. **Load:** Django management command `load_petrinex --month 2026-08` (or `--from/--to`): COPY the reader's filtered, typed rows into `stg_volumetric` (the reader's 16 columns, not all 30), upsert `operators` and `facilities`, then replace the month in `production_monthly` (well × month × product; duplicates summed, `facility_ids` kept) and `facility_activity_monthly`. One transaction per month; each load is recorded in `petrinex_loads` (file, SHA-256, row counts).
    - **Measured (2026-11-20):** 24 months (2024-09 → 2026-08) ≈ 30 s per month; ~242k production rows and 45k–72k flare/vent/fuel rows per month (FUEL/VENT rows rise in winter).
    - A file identical (SHA-256) to the last load of its month is skipped unless `--force`, so the 3-month refresh only reloads months that changed (3 unchanged months: ~5 s). After loading, the command runs `ANALYZE` on both production tables. `stg_volumetric` is `UNLOGGED` (no WAL for throwaway rows).
