@@ -17,7 +17,7 @@ Milestones in build order. Data sources and pipeline: [docs/DATA_PLAN.md](docs/D
 - [x] `production` app: Operator, Facility, ProductionMonthly, FacilityActivityMonthly, staging, load audit
 - [x] `load_petrinex`: COPY into staging, replace-by-month, lineage columns; last 24 months loaded
 - [x] Wells from Well Infrastructure (reader + `wells` table + `v_well_monthly` view); re-check the WellID join on the full production set and report unmatched wells
-- [ ] `documents` app (allowed_roles, upload)
+- [x] `documents` app (allowed_roles, upload)
 - [ ] `seed_demo`: demo company, users per role, watchlist of ~50 real wells
 
 ## M3 — Product API (DRF)

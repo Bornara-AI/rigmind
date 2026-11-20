@@ -49,6 +49,16 @@ docker compose exec django python manage.py load_wells
 
 Each month takes about 30 seconds to load; rerunning a month replaces it, and unchanged files are skipped. Wells take about 90 seconds. Per-well monthly production with GOR and water cut is in the `v_well_monthly` view.
 
+## Add documents
+
+Upload PDFs in the admin (http://localhost:8000/admin/, after `createsuperuser`) or from the command line:
+
+```bash
+docker compose exec django python manage.py add_document /data/docs/directive-060.pdf   --title "Upstream Petroleum Industry Flaring, Incinerating, and Venting"   --kind regulation --reference "Directive 060"   --roles field_engineer ops_manager admin
+```
+
+Each document lists the roles that may read it; answers never use passages a user's role can't see ([ADR 0004](docs/adr/0004-document-access-by-allowed-roles.md)). Files are stored by content hash in `data/uploads/` (git-ignored), and the same file can't be added twice.
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md).
