@@ -95,13 +95,33 @@ def test_upserts_operators_and_facilities(dest: Path) -> None:
 # --- idempotency and lineage ------------------------------------------------
 
 
-def test_rerun_replaces_the_month(dest: Path) -> None:
+def test_forced_rerun_replaces_the_month(dest: Path) -> None:
     load(dest)
-    load(dest)
+    load_volumetric_file(dest / SOURCE, "2026-08", source_file=SOURCE, force=True)
 
     assert ProductionMonthly.objects.count() == 6
     assert FacilityActivityMonthly.objects.count() == 3
     assert PetrinexLoad.objects.count() == 2
+
+
+def test_unchanged_file_is_skipped(dest: Path) -> None:
+    load(dest)
+
+    result = load_volumetric_file(dest / SOURCE, "2026-08", source_file=SOURCE)
+
+    assert result.skipped is True
+    assert PetrinexLoad.objects.count() == 1
+    assert ProductionMonthly.objects.count() == 6
+
+
+def test_staging_table_is_unlogged() -> None:
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT relpersistence FROM pg_class WHERE relname = 'stg_volumetric'"
+        )
+        assert cursor.fetchone() == ("u",)
 
 
 def test_amended_file_removes_rows_that_disappeared(dest: Path) -> None:
@@ -148,6 +168,19 @@ def test_command_loads_month(dest: Path) -> None:
     call_command("load_petrinex", "--month", "2026-08", "--dest", str(dest), stdout=out)
 
     assert "2026-08: 10 rows staged, 6 production, 3 flare/vent/fuel" in out.getvalue()
+
+
+def test_command_skips_unchanged_month_unless_forced(dest: Path) -> None:
+    args = ["load_petrinex", "--month", "2026-08", "--dest", str(dest)]
+    call_command(*args, stdout=StringIO())
+
+    skipped, forced = StringIO(), StringIO()
+    call_command(*args, stdout=skipped)
+    call_command(*args, "--force", stdout=forced)
+
+    assert "unchanged since the last load, skipped" in skipped.getvalue()
+    assert "10 rows staged" in forced.getvalue()
+    assert PetrinexLoad.objects.count() == 2
 
 
 def test_command_fails_for_missing_file(tmp_path: Path) -> None:

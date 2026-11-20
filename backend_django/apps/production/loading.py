@@ -101,6 +101,7 @@ class LoadResult:
     rows_staged: int
     production_rows: int
     activity_rows: int
+    skipped: bool = False  # True if the file matched the last load of this month
 
 
 def month_start(month: str) -> date:
@@ -114,10 +115,37 @@ def _staging_tuple(row: VolumetricRow) -> tuple[object, ...]:
     return (month_start(row.production_month), *rest)
 
 
-def load_volumetric_file(zip_path: Path, month: str, source_file: str) -> LoadResult:
-    """Load one month from zip_path. Rerunning the same month replaces it."""
+def last_loaded_sha256(month: date) -> str | None:
+    """SHA-256 of the most recent load of this month, if any."""
+    return (
+        PetrinexLoad.objects.filter(month=month)
+        .order_by("-loaded_at")
+        .values_list("sha256", flat=True)
+        .first()
+    )
+
+
+def analyze_production_tables() -> None:
+    """Refresh planner statistics after replacing months (many deletes/inserts)."""
+    with connection.cursor() as cursor:
+        cursor.execute("ANALYZE production_monthly, facility_activity_monthly")
+
+
+def load_volumetric_file(
+    zip_path: Path, month: str, source_file: str, *, force: bool = False
+) -> LoadResult:
+    """Load one month from zip_path. Rerunning the same month replaces it.
+
+    Skips the load if the file is identical (SHA-256) to the last load of this
+    month, unless force is True.
+    """
     first_day = month_start(month)
     params = {"month": first_day, "source_file": source_file}
+    digest = sha256_file(zip_path)
+
+    if not force and last_loaded_sha256(first_day) == digest:
+        logger.info("Skip %s: unchanged since the last load", source_file)
+        return LoadResult(first_day, 0, 0, 0, skipped=True)
 
     with transaction.atomic(), connection.cursor() as cursor:
         # Serialize loads: they share the staging table.
@@ -159,7 +187,7 @@ def load_volumetric_file(zip_path: Path, month: str, source_file: str) -> LoadRe
         PetrinexLoad.objects.create(
             month=first_day,
             source_file=source_file,
-            sha256=sha256_file(zip_path),
+            sha256=digest,
             rows_staged=rows_staged,
             production_rows=production_rows,
             activity_rows=activity_rows,
