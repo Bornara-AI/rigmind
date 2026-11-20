@@ -101,10 +101,12 @@ Full plan: `docs/DATA_PLAN.md` (sources, pipeline, seeded data, licence). Decisi
 - `docker compose exec django python manage.py migrate`
 - `docker compose exec django pytest` / `docker compose exec ai pytest`
 - `docker compose exec django python -m petrinex.download vol --from 2024-09 --to 2026-08` (also `infra "Well Infrastructure"`, `codes`; `--force` to re-download) — files go to `data/raw/petrinex/` (git-ignored)
+- `docker compose exec django python manage.py load_petrinex --from 2024-09 --to 2026-08` — load downloaded months (replaces each month)
+- `docker compose exec django python manage.py createsuperuser` — then browse http://localhost:8000/admin/
 - `python evals/run.py` — run the evaluation suite
 
 ## Definition of done (per feature)
 Works in Docker Compose · has tests · OpenAPI updated · logged/traced · README or ADR updated if behaviour or architecture changed · committed and pushed.
 
 ## Current status
-Update this line at the end of each session: **M0 done — Compose (db/redis/django/ai), both health endpoints + tests, CI, pre-commit. M1 done: `petrinex.download` CLI + `petrinex.read.iter_rows()` (streams the nested zip, 51 MB peak on a 120 MB month), 46 tests, fixture `tests/fixtures/petrinex/vol_2026-08_sample.csv`. ADR 0002 (no RAG framework). No migrations yet (custom User model first, M2).** Next: M2 apps (users, documents, production) + `load_petrinex`.
+Update this line at the end of each session: **M0 done — Compose (db/redis/django/ai), both health endpoints + tests, CI, pre-commit. M1 done: `petrinex.download` CLI + `petrinex.read.iter_rows()` (streams the nested zip, 51 MB peak on a 120 MB month), 46 tests, fixture `tests/fixtures/petrinex/vol_2026-08_sample.csv`. ADR 0002 (no RAG framework). M2 in progress: custom `users.User` (role), `production` app + `load_petrinex` (COPY → staging → replace month), 24 months loaded (2024-09 → 2026-08), 61 tests.** Next: Well Infrastructure reader + `wells` + `v_well_monthly`, then `documents` app and `seed_demo`.

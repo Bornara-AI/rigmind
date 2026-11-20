@@ -13,8 +13,11 @@ Milestones in build order. Data sources and pipeline: [docs/DATA_PLAN.md](docs/D
 - [x] Fixtures cut from the real files + tests (quoted comma, masked `***`, duplicate well, blank hours); no network
 
 ## M2 — Domain models and loading (Django)
-- [ ] Apps: `users` (custom user + role), `documents` (allowed_roles, upload), `production` (Well, Facility, Operator, ProductionMonthly, FacilityActivityMonthly, staging)
-- [ ] `load_petrinex`: COPY into staging, idempotent upsert, lineage columns; last 24 months
+- [x] `users` app: custom user + role (before the first migration)
+- [x] `production` app: Operator, Facility, ProductionMonthly, FacilityActivityMonthly, staging, load audit
+- [x] `load_petrinex`: COPY into staging, replace-by-month, lineage columns; last 24 months loaded
+- [ ] Wells from Well Infrastructure (reader + `wells` table + `v_well_monthly` view)
+- [ ] `documents` app (allowed_roles, upload)
 - [ ] `seed_demo`: demo company, users per role, watchlist of ~50 real wells
 
 ## M3 — Product API (DRF)

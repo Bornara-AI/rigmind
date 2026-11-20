@@ -35,6 +35,18 @@ docker compose exec django pytest
 docker compose exec ai pytest
 ```
 
+## Load real production data
+
+RigMind runs on public Alberta data from [Petrinex](https://www.petrinex.gov.ab.ca) (see [docs/DATA_PLAN.md](docs/DATA_PLAN.md)). Raw files are downloaded to `data/raw/` and never committed.
+
+```bash
+docker compose exec django python manage.py migrate
+docker compose exec django python -m petrinex.download vol --from 2024-09 --to 2026-08
+docker compose exec django python manage.py load_petrinex --from 2024-09 --to 2026-08
+```
+
+Each month takes about 30 seconds to load; rerunning a month replaces it.
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md).

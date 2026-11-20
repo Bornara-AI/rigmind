@@ -46,7 +46,7 @@ mv_operator_monthly, mv_top_wells
 Rules:
 - Keep IDs as **text** (leading zeros matter; the layout guide warns about this).
 - Masked confidential values (`***`) become NULL with an `is_masked` flag; never guess them.
-- Upsert keyed on (well_id, month, product): rerunning a month replaces it, because Petrinex republishes amended months.
+- Rerunning a month **replaces** it (delete the month + insert from staging, in one transaction), because Petrinex republishes amended months and an amendment can drop rows that an upsert would leave behind. Unique key (well_id, month, product). Operators and facilities are upserted; the newest month wins.
 - Lineage on every row (source_file, submission_date), so data answers can cite "Petrinex Conventional Volumetrics, 2026-08".
 - Units: liquids m³, gas 10³m³ (e3m3), energy GJ.
 - Start with the last 24 months (see the size estimate below); go to 5 years once queries are indexed.
@@ -86,7 +86,8 @@ Well Infrastructure already carries the licensee, so "production by company" doe
 2. **Parse:** `petrinex.read.iter_rows(zip_path)` yields typed rows (a dataclass per file) straight from the inner zip; the filter keeps well PROD rows and all FLARE/VENT/FUEL rows (these appear on well rows too: VENT 19k, FUEL 8.6k, FLARE 0.6k on `WI` in Aug 2026).
    - **Measured on Aug 2026 (2026-11-20):** 286,193 of 529,582 rows kept (54%): PROD 243,446, VENT 24,749, FUEL 14,932, FLARE 3,066; 774 kept rows masked (all in Hours). ~11 s, 51 MB peak memory. PROD only occurs on `WI` rows; Hours are whole numbers.
    - Distinct `FromToID` on PROD rows: 135,265 (oil > 0: 42,655). The 134,547 / 42,567 in §2 came from an earlier inspection with a definition that was not recorded; use the reader's numbers from now on.
-3. **Load:** Django management command `load_petrinex --month 2026-08`: COPY filtered rows into `stg_volumetric`, then one SQL upsert into `production_monthly` (one row per well × month × product; `v_well_monthly` pivots it) inside a transaction. Rerunning a month replaces it.
+3. **Load:** Django management command `load_petrinex --month 2026-08` (or `--from/--to`): COPY the reader's filtered, typed rows into `stg_volumetric` (the reader's 16 columns, not all 30), upsert `operators` and `facilities`, then replace the month in `production_monthly` (well × month × product; duplicates summed, `facility_ids` kept) and `facility_activity_monthly`. One transaction per month; each load is recorded in `petrinex_loads` (file, SHA-256, row counts).
+   - **Measured (2026-11-20):** 24 months (2024-09 → 2026-08) ≈ 30 s per month; ~242k production rows and 45k–72k flare/vent/fuel rows per month (FUEL/VENT rows rise in winter).
 4. **Refresh:** Celery beat, monthly: download the newest month + re-download the previous 3 (amendments) + infrastructure, then load.
 5. **Tests:** fixtures are 50-row CSVs cut from the real files (masked rows, a quoted comma, a duplicate well, a blank-hours GAS row), zipped twice like the real thing. No network in tests.
 
