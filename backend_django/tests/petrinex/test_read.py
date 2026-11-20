@@ -1,5 +1,3 @@
-import csv
-import io
 import zipfile
 from collections import Counter
 from datetime import date
@@ -9,35 +7,18 @@ from pathlib import Path
 import pytest
 
 from petrinex.read import VolumetricRow, is_relevant, iter_rows
+from tests.helpers import VOL_FIXTURE as FIXTURE
+from tests.helpers import fixture_rows, nested_zip, to_csv_bytes
 
-FIXTURE = Path(__file__).parents[1] / "fixtures" / "petrinex" / "vol_2026-08_sample.csv"
 TOTAL_ROWS = 17
-
-
-def nested_zip(csv_bytes: bytes, folder: Path) -> Path:
-    """Package CSV bytes like the real download: a zip inside a zip."""
-    inner = io.BytesIO()
-    with zipfile.ZipFile(inner, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("Vol_2026-08-AB.CSV", csv_bytes)
-    path = folder / "2026-08.zip"
-    with zipfile.ZipFile(path, "w") as z:
-        z.writestr("Vol_2026-08-AB.csv.zip", inner.getvalue())
-    return path
 
 
 def edited_fixture(**changes: tuple[int, str, str]) -> bytes:
     """Fixture bytes with edits: name=(row_index, column, new_value)."""
-    with FIXTURE.open(encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        fieldnames = list(reader.fieldnames or [])
-        rows = list(reader)
+    fieldnames, rows = fixture_rows()
     for row_index, column, value in changes.values():
         rows[row_index][column] = value
-    out = io.StringIO()
-    writer = csv.DictWriter(out, fieldnames=fieldnames, lineterminator="\r\n")
-    writer.writeheader()
-    writer.writerows(rows)
-    return out.getvalue().encode("utf-8")
+    return to_csv_bytes(fieldnames, rows)
 
 
 @pytest.fixture

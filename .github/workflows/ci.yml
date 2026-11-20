@@ -34,6 +34,8 @@ jobs:
       - run: uv pip install --system -r pyproject.toml --extra dev
       - run: ruff check .
       - run: black --check .
+      - name: Check for missing migrations
+        run: python manage.py makemigrations --check --dry-run
       - run: pytest
 
   ai:
