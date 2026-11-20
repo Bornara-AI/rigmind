@@ -25,11 +25,14 @@ services:
   django:
     build: ./backend_django
     env_file: .env
+    environment:
+      PETRINEX_RAW_DIR: /data/raw/petrinex
     command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "8000:8000"
     volumes:
       - ./backend_django:/app # live reload while developing
+      - ./data:/data # downloaded public data (data/raw is git-ignored)
     depends_on:
       db:
         condition: service_healthy
