@@ -37,6 +37,9 @@ Thumbs.db
 # Downloaded public data (large; re-downloadable)
 data/raw/
 
+# Uploaded documents (may be company-internal)
+data/uploads/
+
 # Local-only files
 docs/private/
 CLAUDE.local.md

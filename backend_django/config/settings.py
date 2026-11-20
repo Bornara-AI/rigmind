@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "apps.users",
     "apps.production",
+    "apps.documents",
 ]
 
 MIDDLEWARE = [
@@ -68,6 +69,13 @@ STATIC_URL = "static/"
 
 # Downloaded Petrinex files (see petrinex.download).
 PETRINEX_RAW_DIR = Path(env("PETRINEX_RAW_DIR", default="data/raw/petrinex"))
+
+# Uploaded documents. Local disk for now (Azure Blob Storage when deployed).
+# MEDIA_URL is never routed: documents are only served through the API, which
+# checks the reader's role.
+MEDIA_ROOT = Path(env("MEDIA_ROOT", default=str(BASE_DIR / "media")))
+MEDIA_URL = "media/"
+DOCUMENT_MAX_UPLOAD_MB = env.int("DOCUMENT_MAX_UPLOAD_MB", default=50)
 
 REST_FRAMEWORK = {
     # JSON only for now; JWT authentication arrives in M3.

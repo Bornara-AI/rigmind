@@ -52,3 +52,8 @@ def to_csv_bytes(fieldnames: list[str], rows: list[dict[str, str]]) -> bytes:
     writer.writeheader()
     writer.writerows(rows)
     return out.getvalue().encode("utf-8")
+
+
+def pdf_bytes(text: str = "sample") -> bytes:
+    """Bytes that pass the PDF check; the text makes each file's hash unique."""
+    return f"%PDF-1.4\n% {text}\n%%EOF\n".encode()

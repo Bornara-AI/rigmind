@@ -28,6 +28,7 @@ services:
     env_file: .env
     environment:
       PETRINEX_RAW_DIR: /data/raw/petrinex
+      MEDIA_ROOT: /data/uploads
     command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "8000:8000"
