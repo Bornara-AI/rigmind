@@ -74,13 +74,13 @@ def is_relevant(raw: RawRow) -> bool:
     return activity in EMISSION_ACTIVITIES
 
 
-def _text(value: str) -> str | None:
+def clean_text(value: str) -> str | None:
     value = value.strip()
     return None if value in ("", MASK) else value
 
 
-def _decimal(value: str) -> Decimal | None:
-    text = _text(value)
+def parse_decimal(value: str) -> Decimal | None:
+    text = clean_text(value)
     if text is None:
         return None
     try:
@@ -89,13 +89,13 @@ def _decimal(value: str) -> Decimal | None:
         raise ValueError(f"not a number: {value!r}") from None
 
 
-def _int(value: str) -> int | None:
-    text = _text(value)
+def parse_int(value: str) -> int | None:
+    text = clean_text(value)
     return None if text is None else int(text)
 
 
-def _date(value: str) -> date | None:
-    text = _text(value)
+def parse_date(value: str) -> date | None:
+    text = clean_text(value)
     return None if text is None else date.fromisoformat(text)
 
 
@@ -109,14 +109,14 @@ def parse_row(raw: RawRow) -> VolumetricRow:
         reporting_facility_type=raw["ReportingFacilityType"].strip(),
         reporting_facility_name=raw["ReportingFacilityName"].strip(),
         reporting_facility_subtype=raw["ReportingFacilitySubType"].strip(),
-        submission_date=_date(raw["SubmissionDate"]),
+        submission_date=parse_date(raw["SubmissionDate"]),
         activity_id=raw["ActivityID"].strip(),
         product_id=raw["ProductID"].strip(),
-        from_to_id=_text(raw["FromToID"]),
-        from_to_id_type=_text(raw["FromToIDType"]),
-        volume=_decimal(raw["Volume"]),
-        energy=_decimal(raw["Energy"]),
-        hours=_int(raw["Hours"]),
+        from_to_id=clean_text(raw["FromToID"]),
+        from_to_id_type=clean_text(raw["FromToIDType"]),
+        volume=parse_decimal(raw["Volume"]),
+        energy=parse_decimal(raw["Energy"]),
+        hours=parse_int(raw["Hours"]),
         is_masked=any(raw[column].strip() == MASK for column in MASKABLE_COLUMNS),
     )
 
@@ -143,6 +143,19 @@ def open_csv(zip_path: Path) -> Iterator[TextIO]:
             yield io.TextIOWrapper(raw, encoding="utf-8", newline="")
 
 
+def iter_raw_rows(
+    zip_path: Path, required: frozenset[str]
+) -> Iterator[tuple[int, RawRow]]:
+    """Yield (line number, row) from the CSV in zip_path after checking the header."""
+    with open_csv(zip_path) as text:
+        reader = csv.DictReader(text)
+        missing = required - set(reader.fieldnames or ())
+        if missing:
+            raise ValueError(f"{zip_path.name}: missing columns {sorted(missing)}")
+        for raw in reader:
+            yield reader.line_num, raw
+
+
 def iter_rows(
     zip_path: Path,
     *,
@@ -153,19 +166,11 @@ def iter_rows(
     Pass keep=None to get every row. Raises ValueError if required columns are
     missing or a value cannot be parsed (the message names the file and line).
     """
-    with open_csv(zip_path) as text:
-        reader = csv.DictReader(text)
-        missing = REQUIRED_COLUMNS - set(reader.fieldnames or ())
-        if missing:
-            raise ValueError(f"{zip_path.name}: missing columns {sorted(missing)}")
-
-        for raw in reader:
-            if keep is not None and not keep(raw):
-                continue
-            try:
-                row = parse_row(raw)
-            except ValueError as exc:
-                raise ValueError(
-                    f"{zip_path.name} line {reader.line_num}: {exc}"
-                ) from exc
-            yield row
+    for line_num, raw in iter_raw_rows(zip_path, REQUIRED_COLUMNS):
+        if keep is not None and not keep(raw):
+            continue
+        try:
+            row = parse_row(raw)
+        except ValueError as exc:
+            raise ValueError(f"{zip_path.name} line {line_num}: {exc}") from exc
+        yield row

@@ -49,6 +49,82 @@ class Facility(models.Model):
         return f"{self.facility_id} {self.name}"
 
 
+class Well(models.Model):
+    """A well from Petrinex Well Infrastructure (one row per WellID).
+
+    production_monthly.well_id joins to well_id (text, not a foreign key: the
+    two files are loaded independently).
+    """
+
+    well_id = models.CharField(primary_key=True, max_length=20)
+    uwi = models.CharField(max_length=21, db_index=True)  # 100/01-02-065-04W4/00
+    well_name = models.CharField(max_length=200)
+    licence_number = models.CharField(max_length=20, db_index=True)
+    licensee_id = models.CharField(max_length=10)
+    licensee_name = models.CharField(max_length=200)
+    linked_facility_ids = ArrayField(models.CharField(max_length=20))
+    field_code = models.CharField(max_length=10)
+    field_name = models.CharField(max_length=100)
+    area_name = models.CharField(max_length=100)
+    pool_code = models.CharField(max_length=20)
+    pool_name = models.CharField(max_length=100)
+    status_fluid = models.CharField(max_length=20)
+    status_mode = models.CharField(max_length=20)
+    status_type = models.CharField(max_length=20)
+    status_date = models.DateField(null=True)
+    spud_date = models.DateField(null=True)
+    drill_direction = models.CharField(max_length=20)
+    total_depth_m = models.DecimalField(null=True, **VOLUME)
+    confidential_type = models.CharField(max_length=30)
+    licence_status = models.CharField(max_length=30)
+    is_orphan = models.BooleanField(default=False)
+    is_masked = models.BooleanField(default=False)
+    source_file = models.CharField(max_length=100)
+
+    class Meta:
+        db_table = "wells"
+        ordering = ["well_id"]
+        indexes = [models.Index(fields=["licensee_id"])]
+
+    def __str__(self) -> str:
+        return f"{self.uwi} {self.well_name}"
+
+
+class StgWell(models.Model):
+    """Staging for Well Infrastructure rows (one per well x linked facility)."""
+
+    well_id = models.TextField()
+    uwi = models.TextField()
+    well_name = models.TextField()
+    licence_number = models.TextField()
+    licensee_id = models.TextField()
+    licensee_name = models.TextField()
+    linked_facility_id = models.TextField()
+    linked_start_date = models.DateField(null=True)
+    field_code = models.TextField()
+    field_name = models.TextField()
+    area_name = models.TextField()
+    pool_code = models.TextField()
+    pool_name = models.TextField()
+    status_fluid = models.TextField()
+    status_mode = models.TextField()
+    status_type = models.TextField()
+    status_date = models.DateField(null=True)
+    spud_date = models.DateField(null=True)
+    drill_direction = models.TextField()
+    total_depth_m = models.DecimalField(null=True, **VOLUME)
+    confidential_type = models.TextField()
+    licence_status = models.TextField()
+    is_orphan = models.BooleanField()
+    is_masked = models.BooleanField()
+
+    class Meta:
+        db_table = "stg_wells"
+
+    def __str__(self) -> str:
+        return f"{self.well_id} -> {self.linked_facility_id}"
+
+
 class ProductionMonthly(models.Model):
     """One row per well x month x product (OIL, GAS, WATER, COND, ...).
 

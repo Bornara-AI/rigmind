@@ -10,14 +10,16 @@ amendment can remove rows, which an upsert alone would leave behind.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import date
+from operator import attrgetter
 from pathlib import Path
 
 from django.db import connection, transaction
 
 from apps.production.models import PetrinexLoad
 from petrinex.download import sha256_file
+from petrinex.infra import WellRow, iter_wells
 from petrinex.read import VolumetricRow, iter_rows
 
 logger = logging.getLogger(__name__)
@@ -196,3 +198,85 @@ def load_volumetric_file(
     result = LoadResult(first_day, rows_staged, production_rows, activity_rows)
     logger.info("Loaded %s: %s", source_file, result)
     return result
+
+
+# --- Wells (Petrinex Well Infrastructure) ----------------------------------
+
+WELL_STAGING_COLUMNS = tuple(f.name for f in fields(WellRow))
+# wells columns copied 1:1 from staging (linked_facility_ids is aggregated)
+WELL_COLUMNS = tuple(
+    c
+    for c in WELL_STAGING_COLUMNS
+    if c not in ("linked_facility_id", "linked_start_date")
+)
+
+UPSERT_WELLS = f"""
+INSERT INTO wells ({", ".join(WELL_COLUMNS)}, linked_facility_ids, source_file)
+SELECT DISTINCT ON (s.well_id) {", ".join(f"s.{c}" for c in WELL_COLUMNS)},
+       links.facility_ids, %(source_file)s
+FROM stg_wells s
+JOIN (
+    SELECT well_id,
+           COALESCE(
+               array_agg(DISTINCT linked_facility_id ORDER BY linked_facility_id)
+                   FILTER (WHERE linked_facility_id <> ''),
+               '{{}}'
+           ) AS facility_ids
+    FROM stg_wells
+    GROUP BY well_id
+) links USING (well_id)
+ORDER BY s.well_id, s.linked_start_date DESC NULLS LAST
+ON CONFLICT (well_id) DO UPDATE
+SET {", ".join(f"{c} = EXCLUDED.{c}" for c in WELL_COLUMNS[1:])},
+    linked_facility_ids = EXCLUDED.linked_facility_ids,
+    source_file = EXCLUDED.source_file
+"""
+
+UNMATCHED_PRODUCTION_WELLS = """
+SELECT p.well_id
+FROM (SELECT DISTINCT well_id FROM production_monthly) p
+LEFT JOIN wells w USING (well_id)
+WHERE w.well_id IS NULL
+ORDER BY p.well_id
+"""
+
+
+@dataclass(frozen=True)
+class WellLoadResult:
+    rows_staged: int
+    wells: int
+
+
+def load_wells_file(zip_path: Path, source_file: str) -> WellLoadResult:
+    """Upsert every well in a Well Infrastructure zip (one transaction).
+
+    Wells are reference data that other tables point at, so they are upserted
+    rather than replaced. Wells missing from a newer file are kept.
+    """
+    getters = [attrgetter(c) for c in WELL_STAGING_COLUMNS]
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext('load_wells'))")
+        cursor.execute("TRUNCATE stg_wells")
+
+        rows_staged = 0
+        columns = ", ".join(WELL_STAGING_COLUMNS)
+        with cursor.copy(f"COPY stg_wells ({columns}) FROM STDIN") as copy:
+            for row in iter_wells(zip_path):
+                copy.write_row([get(row) for get in getters])
+                rows_staged += 1
+
+        cursor.execute(UPSERT_WELLS, {"source_file": source_file})
+        wells = cursor.rowcount
+        cursor.execute("TRUNCATE stg_wells")
+        cursor.execute("ANALYZE wells")
+
+    result = WellLoadResult(rows_staged, wells)
+    logger.info("Loaded %s: %s", source_file, result)
+    return result
+
+
+def unmatched_production_wells() -> list[str]:
+    """Well IDs that have production rows but no row in wells."""
+    with connection.cursor() as cursor:
+        cursor.execute(UNMATCHED_PRODUCTION_WELLS)
+        return [well_id for (well_id,) in cursor.fetchall()]

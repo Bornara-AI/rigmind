@@ -5,23 +5,43 @@ import io
 import zipfile
 from pathlib import Path
 
-VOL_FIXTURE = Path(__file__).parent / "fixtures" / "petrinex" / "vol_2026-08_sample.csv"
+FIXTURES = Path(__file__).parent / "fixtures" / "petrinex"
+VOL_FIXTURE = FIXTURES / "vol_2026-08_sample.csv"
+WELLS_FIXTURE = FIXTURES / "well_infrastructure_sample.csv"
 
 
-def nested_zip(csv_bytes: bytes, folder: Path, name: str = "2026-08.zip") -> Path:
+def nested_zip(
+    csv_bytes: bytes,
+    folder: Path,
+    name: str = "2026-08.zip",
+    inner_csv: str = "Vol_2026-08-AB.CSV",
+) -> Path:
     """Package CSV bytes like the real download: a zip inside a zip."""
     inner = io.BytesIO()
     with zipfile.ZipFile(inner, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("Vol_2026-08-AB.CSV", csv_bytes)
+        z.writestr(inner_csv, csv_bytes)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
     with zipfile.ZipFile(path, "w") as z:
-        z.writestr("Vol_2026-08-AB.csv.zip", inner.getvalue())
+        z.writestr(f"{inner_csv[:-4]}.csv.zip", inner.getvalue())
     return path
 
 
-def fixture_rows() -> tuple[list[str], list[dict[str, str]]]:
-    with VOL_FIXTURE.open(encoding="utf-8", newline="") as f:
+def wells_zip(folder: Path, csv_bytes: bytes | None = None) -> Path:
+    """Well Infrastructure fixture packaged as infra/well-infrastructure.zip."""
+    data = WELLS_FIXTURE.read_bytes() if csv_bytes is None else csv_bytes
+    return nested_zip(
+        data,
+        folder / "infra",
+        name="well-infrastructure.zip",
+        inner_csv="Well Infrastructure-AB.CSV",
+    )
+
+
+def fixture_rows(
+    path: Path = VOL_FIXTURE,
+) -> tuple[list[str], list[dict[str, str]]]:
+    with path.open(encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         return list(reader.fieldnames or []), list(reader)
 

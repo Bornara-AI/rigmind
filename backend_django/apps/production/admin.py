@@ -7,6 +7,7 @@ from apps.production.models import (
     Operator,
     PetrinexLoad,
     ProductionMonthly,
+    Well,
 )
 
 
@@ -34,6 +35,13 @@ class FacilityAdmin(ReadOnlyAdmin):
     list_display = ("facility_id", "name", "facility_type", "subtype", "operator")
     list_filter = ("facility_type",)
     search_fields = ("facility_id", "name")
+
+
+@admin.register(Well)
+class WellAdmin(ReadOnlyAdmin):
+    list_display = ("uwi", "well_name", "licensee_name", "field_name", "status_fluid")
+    list_filter = ("status_fluid", "drill_direction", "is_orphan")
+    search_fields = ("well_id", "uwi", "well_name", "licence_number")
 
 
 @admin.register(ProductionMonthly)
