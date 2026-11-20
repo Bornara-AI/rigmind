@@ -14,7 +14,7 @@ It is a portfolio project that demonstrates:
 |---|---|
 | Product API | Django 5 + Django REST Framework, djangorestframework-simplejwt, drf-spectacular |
 | AI service | FastAPI, Pydantic v2, uvicorn, async |
-| Agent | LangGraph (tool calling) |
+| Agent | LangGraph (tool calling); RAG itself is plain Python + SQL, no LangChain/LlamaIndex (ADR 0002) |
 | LLM / embeddings | OpenAI (provider-agnostic interface so Azure OpenAI can be swapped in) |
 | Database | PostgreSQL 16 + pgvector (app data, production data, vectors in one DB) |
 | Background jobs | Celery + Redis (PDF ingestion, daily briefing) |
@@ -100,10 +100,11 @@ Full plan: `docs/DATA_PLAN.md` (sources, pipeline, seeded data, licence). Decisi
 - `docker compose up --build` — run everything
 - `docker compose exec django python manage.py migrate`
 - `docker compose exec django pytest` / `docker compose exec ai pytest`
+- `docker compose exec django python -m petrinex.download vol --from 2024-09 --to 2026-08` (also `infra "Well Infrastructure"`, `codes`; `--force` to re-download) — files go to `data/raw/petrinex/` (git-ignored)
 - `python evals/run.py` — run the evaluation suite
 
 ## Definition of done (per feature)
 Works in Docker Compose · has tests · OpenAPI updated · logged/traced · README or ADR updated if behaviour or architecture changed · committed and pushed.
 
 ## Current status
-Update this line at the end of each session: **M0 done — Compose (db/redis/django/ai), both health endpoints + tests, CI, pre-commit. M1 started: real Petrinex files inspected (DATA_PLAN §2). No migrations yet (custom User model first, M2).** Next: M1 download CLI + streaming reader.
+Update this line at the end of each session: **M0 done — Compose (db/redis/django/ai), both health endpoints + tests, CI, pre-commit. M1 done: `petrinex.download` CLI + `petrinex.read.iter_rows()` (streams the nested zip, 51 MB peak on a 120 MB month), 46 tests, fixture `tests/fixtures/petrinex/vol_2026-08_sample.csv`. ADR 0002 (no RAG framework). No migrations yet (custom User model first, M2).** Next: M2 apps (users, documents, production) + `load_petrinex`.

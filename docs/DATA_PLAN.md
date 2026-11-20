@@ -83,7 +83,9 @@ Well Infrastructure already carries the licensee, so "production by company" doe
    - `python -m petrinex.download infra "Well Infrastructure" "Well Licence"`
    - `python -m petrinex.download codes`
    - Polite: one request at a time, retry with backoff, skip months already on disk unless `--force`. Log URL, bytes and SHA-256 of each file in `data/raw/petrinex/manifest.jsonl`.
-2. **Parse:** `petrinex.read.iter_rows(zip_path)` yields typed rows (a dataclass per file) straight from the inner zip; the filter keeps well PROD rows and facility FLARE/VENT/FUEL rows (measure the kept share on the first full load).
+2. **Parse:** `petrinex.read.iter_rows(zip_path)` yields typed rows (a dataclass per file) straight from the inner zip; the filter keeps well PROD rows and all FLARE/VENT/FUEL rows (these appear on well rows too: VENT 19k, FUEL 8.6k, FLARE 0.6k on `WI` in Aug 2026).
+   - **Measured on Aug 2026 (2026-11-20):** 286,193 of 529,582 rows kept (54%): PROD 243,446, VENT 24,749, FUEL 14,932, FLARE 3,066; 774 kept rows masked (all in Hours). ~11 s, 51 MB peak memory. PROD only occurs on `WI` rows; Hours are whole numbers.
+   - Distinct `FromToID` on PROD rows: 135,265 (oil > 0: 42,655). The 134,547 / 42,567 in §2 came from an earlier inspection with a definition that was not recorded; use the reader's numbers from now on.
 3. **Load:** Django management command `load_petrinex --month 2026-08`: COPY filtered rows into `stg_volumetric`, then one SQL upsert into `production_monthly` (one row per well × month × product; `v_well_monthly` pivots it) inside a transaction. Rerunning a month replaces it.
 4. **Refresh:** Celery beat, monthly: download the newest month + re-download the previous 3 (amendments) + infrastructure, then load.
 5. **Tests:** fixtures are 50-row CSVs cut from the real files (masked rows, a quoted comma, a duplicate well, a blank-hours GAS row), zipped twice like the real thing. No network in tests.

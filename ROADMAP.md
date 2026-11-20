@@ -8,9 +8,9 @@ Milestones in build order. Data sources and pipeline: [docs/DATA_PLAN.md](docs/D
 
 ## M1 — Petrinex data ingestion
 - [x] Inspect the real files (findings in DATA_PLAN §2): zip-in-zip, ~530k rows/month, well rows = `WI` + `PROD`, IDs join 100% to Well Infrastructure
-- [ ] `petrinex.download` CLI (vol / infra / codes; skip existing, retry, manifest with SHA-256)
-- [ ] `petrinex.read.iter_rows()`: stream rows from the nested zip with `csv` + dataclasses; filter well PROD + FLARE/VENT/FUEL
-- [ ] Fixtures cut from the real files + tests (quoted comma, masked `***`, duplicate well, blank hours); no network
+- [x] `petrinex.download` CLI (vol / infra / codes; skip existing, retry, manifest with SHA-256)
+- [x] `petrinex.read.iter_rows()`: stream rows from the nested zip with `csv` + dataclasses; filter well PROD + FLARE/VENT/FUEL
+- [x] Fixtures cut from the real files + tests (quoted comma, masked `***`, duplicate well, blank hours); no network
 
 ## M2 — Domain models and loading (Django)
 - [ ] Apps: `users` (custom user + role), `documents` (allowed_roles, upload), `production` (Well, Facility, Operator, ProductionMonthly, FacilityActivityMonthly, staging)
